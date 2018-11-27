@@ -57,6 +57,16 @@ public class DefaultMp4Builder implements Mp4Builder {
     HashMap<Track, long[]> track2SampleSizes = new HashMap<Track, long[]>();
     private Fragmenter fragmenter;
 
+    public interface ProgressListener {
+        void onProgress(int percent);
+    }
+    private ProgressListener mListener = null;
+
+    public DefaultMp4Builder setProgressListener(ProgressListener listener) {
+        mListener = listener;
+        return this;
+    }
+
     private static long sum(int[] ls) {
         long rc = 0;
         for (long l : ls) {
@@ -668,6 +678,11 @@ public class DefaultMp4Builder implements Mp4Builder {
                             // either first OR track's next chunk's starttime is smaller than nextTrack's next chunks starttime
                             // AND their need to be chunks left!
                             (trackToChunk.get(track) < chunks.get(track).length)) {
+
+                        if (mListener != null) {
+                            final int percent = (int) ((double) trackToChunk.get(track) / chunks.get(track).length * 100.0);
+                            mListener.onProgress(percent);
+                        }
                         nextChunksTrack = track;
                     }
                 }
