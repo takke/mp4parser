@@ -1,0 +1,46 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+
+group = 'com.googlecode.mp4parser'
+version = '1.1.23-SNAPSHOT'
+
+description = """ISO Parser"""
+
+sourceCompatibility = 1.5
+targetCompatibility = 1.5
+tasks.withType(JavaCompile) {
+	options.encoding = 'UTF-8'
+}
+
+buildscript {
+    repositories {
+        maven {
+            url "https://maven.eveoh.nl/content/repositories/releases"
+        }
+    }
+
+    dependencies {
+        classpath "nl.eveoh:gradle-aspectj:2.0"
+    }
+}
+
+repositories {
+        
+     maven { url "http://repo.maven.apache.org/maven2" }
+}
+
+project.ext {
+    aspectjVersion = '1.8.2'
+}
+
+apply plugin: 'aspectj'
+
+dependencies {
+    compile group: 'org.aspectj', name: 'aspectjrt', version:'1.8.2'
+
+    testCompile group: 'junit', name: 'junit', version:'4.10'
+    testCompile group: 'commons-io', name: 'commons-io', version:'2.4'
+    testCompile group: 'commons-codec', name: 'commons-codec', version:'1.8'
+
+    compileOnly group: 'com.google.android', name: 'android', version:'1.6_r2'
+}
