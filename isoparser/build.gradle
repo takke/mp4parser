@@ -12,28 +12,44 @@ tasks.withType(JavaCompile) {
 	options.encoding = 'UTF-8'
 }
 
+// Android Studio 3.3 rc1 -> 3.4 Canary5 に上げると Gradle の仕様変更のため
+// 下記いずれの AspectJ Plugin も動作しなくなったので、maven でビルドすること。
+
+// https://github.com/eveoh/gradle-aspectj
+// https://plugins.gradle.org/plugin/com.github.smac89.aspectj
+// https://github.com/smac89/aspectj-gradle
+// https://github.com/james-bryant/gradle-aspectj
+
 buildscript {
     repositories {
-        maven {
-            url "https://maven.eveoh.nl/content/repositories/releases"
-        }
+
+//        maven { url "https://maven.eveoh.nl/content/repositories/releases" }
+//        maven { url "https://plugins.gradle.org/m2/" }
+//        maven { url "https://plugins.gradle.org/m2/" }
+//        mavenCentral()
     }
 
     dependencies {
-        classpath "nl.eveoh:gradle-aspectj:2.0"
+//        classpath "nl.eveoh:gradle-aspectj:2.0"
+//        classpath "gradle.plugin.aspectj:gradle-aspectj:0.1.6"
+//        classpath "gradle.plugin.com.github.smac89.aspectj:aspectj-gradle:0.1.2"
+//        classpath "net.uberfoo.gradle:gradle-aspectj:2.2"
     }
 }
 
 repositories {
-        
+
      maven { url "http://repo.maven.apache.org/maven2" }
 }
 
 project.ext {
-    aspectjVersion = '1.8.2'
+    aspectjVersion = '1.8.13'
 }
 
-apply plugin: 'aspectj'
+//apply plugin: 'aspectj'
+//apply plugin: "aspectj.gradle"
+//apply plugin: "com.github.smac89.aspectj"
+//apply plugin: 'aspectj'
 
 dependencies {
     compile group: 'org.aspectj', name: 'aspectjrt', version:'1.8.2'
