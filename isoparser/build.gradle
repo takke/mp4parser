@@ -23,14 +23,14 @@ tasks.withType(JavaCompile) {
 buildscript {
     repositories {
 
-//        maven { url "https://maven.eveoh.nl/content/repositories/releases" }
+        maven { url "https://maven.eveoh.nl/content/repositories/releases" }
 //        maven { url "https://plugins.gradle.org/m2/" }
 //        maven { url "https://plugins.gradle.org/m2/" }
 //        mavenCentral()
     }
 
     dependencies {
-//        classpath "nl.eveoh:gradle-aspectj:2.0"
+        classpath "nl.eveoh:gradle-aspectj:2.0"
 //        classpath "gradle.plugin.aspectj:gradle-aspectj:0.1.6"
 //        classpath "gradle.plugin.com.github.smac89.aspectj:aspectj-gradle:0.1.2"
 //        classpath "net.uberfoo.gradle:gradle-aspectj:2.2"
@@ -46,7 +46,7 @@ project.ext {
     aspectjVersion = '1.8.13'
 }
 
-//apply plugin: 'aspectj'
+apply plugin: 'aspectj'
 //apply plugin: "aspectj.gradle"
 //apply plugin: "com.github.smac89.aspectj"
 //apply plugin: 'aspectj'
