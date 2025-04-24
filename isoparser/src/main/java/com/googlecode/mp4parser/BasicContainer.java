@@ -173,7 +173,7 @@ public class BasicContainer implements Container, Iterator<Box>, Closeable {
             lookahead = null;
             return b;
         } else {
-           // LOG.logDebug("Parsing next() box");
+            // LOG.logDebug("Parsing next() box");
             if (dataSource == null || parsePosition >= endPosition) {
                 lookahead = EOF;
                 throw new NoSuchElementException();
@@ -218,43 +218,54 @@ public class BasicContainer implements Container, Iterator<Box>, Closeable {
     }
 
     public ByteBuffer getByteBuffer(long rangeStart, long size) throws IOException {
-        if (this.dataSource != null) {
-            synchronized (this.dataSource) {
-                return this.dataSource.map(this.startPosition + rangeStart, size);
-            }
-        } else {
-            ByteBuffer out = ByteBuffer.allocate(l2i(size));
-            long rangeEnd = rangeStart + size;
-            long boxStart;
-            long boxEnd = 0;
-            for (Box box : boxes) {
-                boxStart = boxEnd;
-                boxEnd = boxStart + box.getSize();
-                if (!(boxEnd <= rangeStart || boxStart >= rangeEnd)) {
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    WritableByteChannel wbc = Channels.newChannel(baos);
-                    box.getBox(wbc);
-                    wbc.close();
 
-                    if (boxStart >= rangeStart && boxEnd <= rangeEnd) {
-                        out.put(baos.toByteArray());
-                        // within -> use full box
-                    } else if (boxStart < rangeStart && boxEnd > rangeEnd) {
-                        // around -> use 'middle' of box
-                        int length = l2i(box.getSize() - (rangeStart - boxStart) - (boxEnd - rangeEnd));
-                        out.put(baos.toByteArray(), l2i(rangeStart - boxStart), length);
-                    } else if (boxStart < rangeStart && boxEnd <= rangeEnd) {
-                        // endwith
-                        int length = l2i(box.getSize() - (rangeStart - boxStart));
-                        out.put(baos.toByteArray(), l2i(rangeStart - boxStart), length);
-                    } else if (boxStart >= rangeStart && boxEnd > rangeEnd) {
-                        int length = l2i(box.getSize() - (boxEnd - rangeEnd));
-                        out.put(baos.toByteArray(), 0, length);
-                    }
-                }
-            }
-            return (ByteBuffer) out.rewind();
+        // 長時間(概ね15分以上)の範囲を出力しようとすると OutOfMemoryError になるので単純に read でロードする
+        ByteBuffer buffer = ByteBuffer.allocate(l2i(size));
+        synchronized (this.dataSource) {
+            this.dataSource.position(this.startPosition + rangeStart);
+            this.dataSource.read(buffer);
         }
+        buffer.flip();
+        return buffer;
+
+        // 下記は元の map を使った版
+//        if (this.dataSource != null) {
+//            synchronized (this.dataSource) {
+//                return this.dataSource.map(this.startPosition + rangeStart, size);
+//            }
+//        } else {
+//            ByteBuffer out = ByteBuffer.allocate(l2i(size));
+//            long rangeEnd = rangeStart + size;
+//            long boxStart;
+//            long boxEnd = 0;
+//            for (Box box : boxes) {
+//                boxStart = boxEnd;
+//                boxEnd = boxStart + box.getSize();
+//                if (!(boxEnd <= rangeStart || boxStart >= rangeEnd)) {
+//                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//                    WritableByteChannel wbc = Channels.newChannel(baos);
+//                    box.getBox(wbc);
+//                    wbc.close();
+//
+//                    if (boxStart >= rangeStart && boxEnd <= rangeEnd) {
+//                        out.put(baos.toByteArray());
+//                        // within -> use full box
+//                    } else if (boxStart < rangeStart && boxEnd > rangeEnd) {
+//                        // around -> use 'middle' of box
+//                        int length = l2i(box.getSize() - (rangeStart - boxStart) - (boxEnd - rangeEnd));
+//                        out.put(baos.toByteArray(), l2i(rangeStart - boxStart), length);
+//                    } else if (boxStart < rangeStart && boxEnd <= rangeEnd) {
+//                        // endwith
+//                        int length = l2i(box.getSize() - (rangeStart - boxStart));
+//                        out.put(baos.toByteArray(), l2i(rangeStart - boxStart), length);
+//                    } else if (boxStart >= rangeStart && boxEnd > rangeEnd) {
+//                        int length = l2i(box.getSize() - (boxEnd - rangeEnd));
+//                        out.put(baos.toByteArray(), 0, length);
+//                    }
+//                }
+//            }
+//            return (ByteBuffer) out.rewind();
+//        }
     }
 
     public void close() throws IOException {
