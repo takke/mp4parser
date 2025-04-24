@@ -51,7 +51,7 @@ import static com.googlecode.mp4parser.util.Math.lcm;
 public class DefaultMp4Builder implements Mp4Builder {
 
     private static Logger LOG = Logger.getLogger(DefaultMp4Builder.class);
-    Map<Track, StaticChunkOffsetBox> chunkOffsetBoxes = new HashMap<Track, StaticChunkOffsetBox>();
+    Map<Track, ChunkOffset64BitBox> chunkOffsetBoxes = new HashMap<Track, ChunkOffset64BitBox>();
     Set<SampleAuxiliaryInformationOffsetsBox> sampleAuxiliaryInformationOffsetsBoxes = new HashSet<SampleAuxiliaryInformationOffsetsBox>();
     HashMap<Track, List<Sample>> track2Sample = new HashMap<Track, List<Sample>>();
     HashMap<Track, long[]> track2SampleSizes = new HashMap<Track, long[]>();
@@ -132,7 +132,7 @@ public class DefaultMp4Builder implements Mp4Builder {
         at offset 16 so that we can use the same offset for large boxes and small boxes
          */
         long dataOffset = mdat.getDataOffset();
-        for (StaticChunkOffsetBox chunkOffsetBox : chunkOffsetBoxes.values()) {
+        for (ChunkOffset64BitBox chunkOffsetBox : chunkOffsetBoxes.values()) {
             long[] offsets = chunkOffsetBox.getChunkOffsets();
             for (int i = 0; i < offsets.length; i++) {
                 offsets[i] += dataOffset;
@@ -486,7 +486,7 @@ public class DefaultMp4Builder implements Mp4Builder {
                 trackToChunk.put(track, 0);
                 trackToSample.put(track, 0);
                 trackToTime.put(track, 0.0);
-                chunkOffsetBoxes.put(track, new StaticChunkOffsetBox());
+                chunkOffsetBoxes.put(track, new ChunkOffset64BitBox());
             }
 
             while (true) {
