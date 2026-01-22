@@ -92,6 +92,10 @@ public class MediaHeaderBox extends AbstractFullBox {
 
     public void setDuration(long duration) {
         this.duration = duration;
+        // duration が 32ビット範囲を超える場合は version 1 (64ビット) を使用
+        if (duration >= (1L << 32)) {
+            setVersion(1);
+        }
     }
 
     public void setLanguage(String language) {
