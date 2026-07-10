@@ -12,6 +12,12 @@ import java.nio.channels.WritableByteChannel;
 
 public class FileDataSourceImpl implements DataSource {
     private static Logger LOG = Logger.getLogger(FileDataSourceImpl.class);
+
+    // 1回の read で FileChannel に渡す最大サイズ。
+    // 巨大な heap ByteBuffer をそのまま渡すと NIO 内部で同サイズの一時 DirectByteBuffer が
+    // 確保され OutOfMemoryError の原因になるため分割して読み込む。
+    private static final int MAX_READ_CHUNK_SIZE = 8 * 1024 * 1024;
+
     FileChannel fc;
     String filename;
 
@@ -38,7 +44,17 @@ public class FileDataSourceImpl implements DataSource {
     }
 
     public synchronized int read(ByteBuffer byteBuffer) throws IOException {
-        return fc.read(byteBuffer);
+        if (byteBuffer.isDirect() || byteBuffer.remaining() <= MAX_READ_CHUNK_SIZE) {
+            return fc.read(byteBuffer);
+        }
+        // limit を一時的に縮めてチャンク単位で読み込む（呼び出し側は remaining が 0 になるまでループする契約）
+        int originalLimit = byteBuffer.limit();
+        byteBuffer.limit(byteBuffer.position() + MAX_READ_CHUNK_SIZE);
+        try {
+            return fc.read(byteBuffer);
+        } finally {
+            byteBuffer.limit(originalLimit);
+        }
     }
 
     public synchronized long size() throws IOException {
