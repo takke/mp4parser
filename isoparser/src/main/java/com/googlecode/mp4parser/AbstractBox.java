@@ -27,6 +27,7 @@ import com.googlecode.mp4parser.annotations.DoNotParseDetail;
 import com.googlecode.mp4parser.util.Logger;
 import com.googlecode.mp4parser.util.Path;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
@@ -107,9 +108,17 @@ public abstract class AbstractBox implements Box {
         this.offset = dataSource.position() - header.remaining();
         this.dataSource = dataSource;
 
-        content = ByteBuffer.allocate(l2i(contentSize));
+        try {
+            content = ByteBuffer.allocate(l2i(contentSize));
+        } catch (OutOfMemoryError e) {
+            // 破損ファイル等で box サイズが巨大な場合にアプリ側で復帰可能なよう IOException に変換する
+            throw new IOException("box content too large to allocate: type=" + type + ", contentSize=" + contentSize, e);
+        }
         while (content.remaining() > 0) {
-            dataSource.read(content);
+            if (dataSource.read(content) < 0) {
+                // サイズフィールドがファイル実体より大きい破損ファイルで無限ループしないよう EOF を検出する
+                throw new EOFException("premature EOF while reading box content: type=" + type + ", contentSize=" + contentSize);
+            }
         }
         content.position(0);
 
