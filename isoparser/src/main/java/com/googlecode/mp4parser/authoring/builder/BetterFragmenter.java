@@ -21,7 +21,9 @@ public class BetterFragmenter implements Fragmenter {
         long[] fragments = new long[0];
         long[] syncSamples = track.getSyncSamples();
         long[] durations = track.getSampleDurations();
-        if (syncSamples != null) {
+        // 同期サンプルが 0 個の場合は「同期サンプルなし」と同じ扱いにする
+        // (以前は下の syncSampleTicks[syncSampleTicks.length - 1] で ArrayIndexOutOfBoundsException になっていた)
+        if (syncSamples != null && syncSamples.length > 0) {
             long[] syncSampleTicks = new long[syncSamples.length];
             long ticks = 0;
             long duration = track.getDuration();
@@ -47,6 +49,19 @@ public class BetterFragmenter implements Fragmenter {
             }
             if (duration - syncSampleTicks[syncSampleTicks.length - 1] > targetTicks / 2) {
                 fragments = Mp4Arrays.copyOfAndAppend(fragments, syncSamples[syncSampleTicks.length - 1]);
+            }
+
+            // 最初のチャンクは必ずサンプル 1 から始まる必要がある。
+            // 同期サンプルが 1 個だけで長さが targetDuration / 2 以下のトラック(1 秒以下の短いクリップ)では
+            // 上のループも末尾の判定も成立せず結果が空になり、ビルダーがチャンク 0 個の(再生できない)
+            // ファイルを書き出していた。また先頭が同期サンプルでないトラックでは、先頭の同期サンプルより
+            // 前のサンプルがどのチャンクにも入らなくなる。どちらもサンプル 1 を先頭に補って救済する。
+            // ※正常に出力できていたケースは結果が [1, ...] なので変わらない
+            if (fragments.length == 0 || fragments[0] != 1) {
+                long[] withFirst = new long[fragments.length + 1];
+                withFirst[0] = 1;
+                System.arraycopy(fragments, 0, withFirst, 1, fragments.length);
+                fragments = withFirst;
             }
         } else {
 

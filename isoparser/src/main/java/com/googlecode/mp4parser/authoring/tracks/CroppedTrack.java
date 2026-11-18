@@ -146,11 +146,16 @@ public class CroppedTrack extends AbstractTrack {
     synchronized public long[] getSyncSamples() {
         if (origTrack.getSyncSamples() != null) {
             long[] origSyncSamples = origTrack.getSyncSamples();
+            // origSyncSamples は 1 始まりのサンプル番号、fromSample/toSample は 0 始まり(toSample は exclusive)。
+            // 0 始まりの範囲 [fromSample, toSample) は 1 始まりでは [fromSample + 1, toSample] になるので、
+            // 1 始まりの番号 s が範囲内なのは fromSample < s <= toSample のとき。
+            // (以前は先頭側を s < fromSample で除外していたため、s == fromSample のキーフレーム(範囲の直前の
+            //  サンプル)が残り、下の変換で不正な番号 0 が stss に入っていた。キーフレームが連続する動画で発生)
             int i = 0, j = origSyncSamples.length;
-            while (i < origSyncSamples.length && origSyncSamples[i] < fromSample) {
+            while (i < origSyncSamples.length && origSyncSamples[i] <= fromSample) {
                 i++;
             }
-            while (j > 0 && toSample < origSyncSamples[j - 1]) {
+            while (j > i && toSample < origSyncSamples[j - 1]) {
                 j--;
             }
             long[] syncSampleArray = new long[j - i];

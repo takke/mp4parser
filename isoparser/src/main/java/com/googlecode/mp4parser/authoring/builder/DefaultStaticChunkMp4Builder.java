@@ -621,10 +621,38 @@ public class DefaultStaticChunkMp4Builder implements Mp4Builder {
 
             chunkSizes[i] = l2i(end - start);
         }
-        assert DefaultStaticChunkMp4Builder.this.track2Sample.get(track).size() == sum(chunkSizes) : "The number of samples and the sum of all chunk lengths must be equal";
+        // 以前は assert だった(Android では assert が無効のため素通りしていた)。
+        // チャンク分割の結果がサンプル数と合わないまま書き出すと、例外なしで再生できないファイル
+        // (チャンク 0 個 = 空の stsc/stco など)ができてしまうため、実際にチェックして失敗させる
+        checkChunkSizes(track, chunkSizes);
         return chunkSizes;
 
 
+    }
+
+    /**
+     * チャンク分割の結果(各チャンクのサンプル数)がトラックのサンプル数と整合しているか確認する
+     *
+     * @throws IllegalStateException サンプルがあるのにチャンクが 0 個、チャンクのサンプル数が負、
+     *                               またはチャンクのサンプル数の合計がトラックのサンプル数と一致しない場合
+     */
+    static void checkChunkSizes(Track track, int[] chunkSizes) {
+        int sampleCount = track.getSamples().size();
+        if (sampleCount > 0 && chunkSizes.length == 0) {
+            throw new IllegalStateException("チャンク分割に失敗しました(サンプルが " + sampleCount
+                    + " 個あるのにチャンクが 0 個です): track=" + track.getName());
+        }
+        for (int i = 0; i < chunkSizes.length; i++) {
+            if (chunkSizes[i] < 0) {
+                throw new IllegalStateException("チャンク分割に失敗しました(チャンク " + i + " のサンプル数が負です: "
+                        + chunkSizes[i] + "): track=" + track.getName());
+            }
+        }
+        long total = sum(chunkSizes);
+        if (total != sampleCount) {
+            throw new IllegalStateException("チャンク分割に失敗しました(チャンクのサンプル数の合計 " + total
+                    + " がトラックのサンプル数 " + sampleCount + " と一致しません): track=" + track.getName());
+        }
     }
 
     public long getTimescale(Movie movie) {

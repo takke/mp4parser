@@ -20,6 +20,17 @@ import static com.googlecode.mp4parser.util.CastUtils.l2i;
 public class DefaultMp4SampleList extends AbstractList<Sample> {
     private static final Logger LOG = Logger.getLogger(DefaultMp4SampleList.class);
 
+    /**
+     * チャンク全体を読み込んでキャッシュするチャンクサイズの上限(既定値)。これを超えるチャンクはサンプル単位で読む。
+     * <p>
+     * 従来はサンプルを読むたびにチャンク全体を heap に読み込み(SoftReference でキャッシュ)していたため、
+     * キーフレームが少ない動画などでチャンクが数百 MB になると OutOfMemoryError になっていた
+     * (Android の heap 上限は端末により 256〜512MB 程度)。
+     * 8MB は FileDataSourceImpl が heap バッファへの 1 回の読み込みで扱う上限(MAX_READ_CHUNK_SIZE)と同じで、
+     * 一般的な mp4 のチャンク(数十 KB〜数 MB)はこれ以下なので、通常のファイルの挙動・速度は変わらない。
+     */
+    public static final long DEFAULT_LARGE_CHUNK_THRESHOLD = 8 * 1024 * 1024;
+
     Container topLevel;
     TrackBox trackBox = null;
     SoftReference<ByteBuffer>[] cache = null;
@@ -29,6 +40,8 @@ public class DefaultMp4SampleList extends AbstractList<Sample> {
     long[][] sampleOffsetsWithinChunks;
     SampleSizeBox ssb;
     int lastChunk = 0;
+    // これを超えるサイズのチャンクはチャンク全体を読まずサンプル単位で読む(テストから変更できるよう非 final)
+    long largeChunkThreshold = DEFAULT_LARGE_CHUNK_THRESHOLD;
 
 
     public DefaultMp4SampleList(long track, Container topLevel) {
@@ -197,13 +210,26 @@ public class DefaultMp4SampleList extends AbstractList<Sample> {
             long[] sampleOffsetsWithinChunk = sampleOffsetsWithinChunks[l2i(chunkNumber)];
             long offsetWithInChunk = sampleOffsetsWithinChunk[sampleInChunk];
 
+            final long chunkSize = sampleOffsetsWithinChunk[sampleOffsetsWithinChunk.length - 1] + ssb.getSampleSizeAtIndex(chunkStartSample + sampleOffsetsWithinChunk.length - 1);
+            if (chunkSize > largeChunkThreshold) {
+                // 巨大なチャンクは全体を heap に読むと OutOfMemoryError になるため、このサンプルの範囲だけを読む(キャッシュしない)
+                try {
+                    return topLevel.getByteBuffer(chunkOffsets[l2i(chunkNumber)] + offsetWithInChunk, ssb.getSampleSizeAtIndex(index));
+                } catch (IOException e) {
+                    StringWriter sw = new StringWriter();
+                    e.printStackTrace(new PrintWriter(sw));
+                    LOG.logError(sw.toString());
+                    throw new IndexOutOfBoundsException(e.getMessage());
+                }
+            }
+
             ByteBuffer chunkBuffer;
             if (chunkBufferSr == null || (chunkBuffer = chunkBufferSr.get()) == null) {
                 try {
 
                     chunkBuffer = topLevel.getByteBuffer(
                             chunkOffsets[l2i(chunkNumber)],
-                            sampleOffsetsWithinChunk[sampleOffsetsWithinChunk.length - 1] + ssb.getSampleSizeAtIndex(chunkStartSample + sampleOffsetsWithinChunk.length - 1)
+                            chunkSize
                     );
                     cache[chunkNumber] = new SoftReference<ByteBuffer>(chunkBuffer);
                 } catch (IOException e) {
