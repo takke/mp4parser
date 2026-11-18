@@ -37,6 +37,9 @@ public class BasicContainer implements Container, Iterator<Box>, Closeable {
         }
     };
     private static Logger LOG = Logger.getLogger(BasicContainer.class);
+
+    // getByteBuffer で read が 0 を返し続けた場合に諦めるまでの連続回数
+    private static final int MAX_ZERO_READ_RETRY = 100;
     protected BoxParser boxParser;
     protected DataSource dataSource;
     Box lookahead = null;
@@ -223,7 +226,26 @@ public class BasicContainer implements Container, Iterator<Box>, Closeable {
         ByteBuffer buffer = ByteBuffer.allocate(l2i(size));
         synchronized (this.dataSource) {
             this.dataSource.position(this.startPosition + rangeStart);
-            this.dataSource.read(buffer);
+            // DataSource.read は1回で全量を読むとは限らない(FileDataSourceImpl は heap バッファへの
+            // 1回の読み込みを最大 8MB に制限している)ため、バッファが埋まるまで繰り返し読む
+            int zeroReadCount = 0;
+            while (buffer.hasRemaining()) {
+                int n = this.dataSource.read(buffer);
+                if (n < 0) {
+                    // ファイルが途中で切れている(チャンクのオフセット/サイズがファイル実体を超えている)
+                    throw new EOFException("ファイルが途中で切れています(premature EOF): start=" + (this.startPosition + rangeStart)
+                            + ", size=" + size + ", read=" + buffer.position());
+                }
+                if (n == 0) {
+                    // 読み込みが進まない状態が続く場合は無限ループを避けて失敗させる
+                    if (++zeroReadCount >= MAX_ZERO_READ_RETRY) {
+                        throw new IOException("データを読み込めません(read が 0 を返し続けました): start=" + (this.startPosition + rangeStart)
+                                + ", size=" + size + ", read=" + buffer.position());
+                    }
+                } else {
+                    zeroReadCount = 0;
+                }
+            }
         }
         buffer.flip();
         return buffer;

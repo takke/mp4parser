@@ -82,7 +82,14 @@ public class MetaBox extends AbstractContainerBox {
     @Override
     public void parse(DataSource dataSource, ByteBuffer header, long contentSize, BoxParser boxParser) throws IOException {
         ByteBuffer bb = ByteBuffer.allocate(l2i(contentSize));
-        dataSource.read(bb);
+        // meta box はサイズ上限が無く(カバー画像等の埋め込みで 8MB を超えうる)、DataSource.read は
+        // 1回で全量を読むとは限らないため、バッファが埋まるまで繰り返し読む。
+        // EOF 等で読めなくなった場合は従来どおり例外にせず打ち切る(従来の寛容な挙動を変えないため)
+        while (bb.hasRemaining()) {
+            if (dataSource.read(bb) <= 0) {
+                break;
+            }
+        }
         bb.position(4);
         String isHdlr = IsoTypeReader.read4cc(bb);
         if ("hdlr".equals(isHdlr)) {
