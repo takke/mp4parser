@@ -50,14 +50,22 @@ public class AppendTrack extends AbstractTrack {
         super(appendTracknames(tracks));
         this.tracks = tracks;
 
-        for (Track track : tracks) {
+        if (hasUnreadableSampleEntry(tracks)) {
+            // SampleEntry として読めない sample entry(未対応コーデックの vp09 / av01 / Opus や、未知のメタデータトラック等。
+            // UnknownBox として読まれる)を持つトラックは、sample entry の中身を解釈してマージできない。
+            // 全トラックの stsd がバイト単位で同一(同じ元トラックから切り出した区間の連結など)なら、元の stsd をそのまま使う。
+            // (以前は下の getBoxes(SampleEntry.class).get(0) が空リストに対して IndexOutOfBoundsException("Index: 0") になっていた)
+            stsd = requireIdenticalStsds(tracks);
+        } else {
+            for (Track track : tracks) {
 
-            if (stsd == null) {
-                stsd = new SampleDescriptionBox();
-                stsd.addBox(track.getSampleDescriptionBox().getBoxes(SampleEntry.class).get(0));
-            } else {
-                stsd = mergeStsds(stsd, track.getSampleDescriptionBox());
+                if (stsd == null) {
+                    stsd = new SampleDescriptionBox();
+                    stsd.addBox(track.getSampleDescriptionBox().getBoxes(SampleEntry.class).get(0));
+                } else {
+                    stsd = mergeStsds(stsd, track.getSampleDescriptionBox());
 
+                }
             }
         }
         lists = new ArrayList<Sample>();
@@ -79,6 +87,63 @@ public class AppendTrack extends AbstractTrack {
             System.arraycopy(durs, 0, decodingTimes, index, durs.length);
             index += durs.length;
         }
+    }
+
+    /**
+     * SampleEntry として読めない sample entry しか持たない stsd のトラックがあるかどうか
+     */
+    private static boolean hasUnreadableSampleEntry(Track[] tracks) {
+        for (Track track : tracks) {
+            SampleDescriptionBox trackStsd = track.getSampleDescriptionBox();
+            if (trackStsd != null && trackStsd.getBoxes(SampleEntry.class).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 全トラックの stsd がバイト単位で同一であることを確認し、先頭トラックの stsd を返す
+     *
+     * @throws IOException stsd が異なる場合(sample entry を解釈できないためマージできない)
+     */
+    private static SampleDescriptionBox requireIdenticalStsds(Track[] tracks) throws IOException {
+        SampleDescriptionBox first = tracks[0].getSampleDescriptionBox();
+        if (first == null) {
+            throw new IOException("トラックを連結できません(先頭のトラックに stsd がありません)");
+        }
+        byte[] firstBytes = toBytes(first);
+        for (int i = 1; i < tracks.length; i++) {
+            SampleDescriptionBox other = tracks[i].getSampleDescriptionBox();
+            if (other != first && (other == null || !Arrays.equals(firstBytes, toBytes(other)))) {
+                throw new IOException("未対応の形式(sample entry)のトラックは、形式の設定が異なると連結できません: ["
+                        + describeSampleEntries(first) + "] と [" + describeSampleEntries(other) + "]");
+            }
+        }
+        return first;
+    }
+
+    private static byte[] toBytes(SampleDescriptionBox box) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        box.getBox(Channels.newChannel(baos));
+        return baos.toByteArray();
+    }
+
+    /**
+     * エラーメッセージ用に stsd 内の sample entry の種別(4CC)を列挙する
+     */
+    private static String describeSampleEntries(SampleDescriptionBox box) {
+        if (box == null) {
+            return "stsd なし";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Box entry : box.getBoxes()) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(entry.getType());
+        }
+        return sb.toString();
     }
 
     public static String appendTracknames(Track... tracks) {
